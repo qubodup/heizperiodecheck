@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <title>Heizperiode Temperaturcheck 21 Uhr</title>
+  <title>Heizperiode Temperaturcheck</title>
   <style>
     body { font-family: monospace; padding: 20px; }
     textarea { width: 100%; height: 200px; }
@@ -13,18 +13,48 @@
   </style>
 </head>
 <body>
-  <h2>Heizperiode Temperaturcheck 21 Uhr</h2>
-  <p>1. <a href="https://www.dwd.de/DE/leistungen/klimadatendeutschland/klarchivstunden.html">DWD-Daten</a> herunterladen, 2. Inhalt der produkt_tu_stunde_....txt-Datei einfügen.</p>
+  <h2>Heizperiode Temperaturcheck</h2>
+  <p>1. <a href="https://www.dwd.de/DE/leistungen/klimadatendeutschland/klarchivstunden.html">DWD-Daten</a> herunterladen<br>2. Inhalt der produkt_tu_stunde_....txt-Datei einfügen.</p>
+
   <textarea id="input"></textarea><br>
+
+  <label for="hourSelect">3. Stunde auswählen:</label>
+  <select id="hourSelect">
+    <!-- build options 00 to 23 -->
+    <option value="00">00:00</option>
+    <option value="01">01:00</option>
+    <option value="02">02:00</option>
+    <option value="03">03:00</option>
+    <option value="04">04:00</option>
+    <option value="05">05:00</option>
+    <option value="06">06:00</option>
+    <option value="07">07:00</option>
+    <option value="08">08:00</option>
+    <option value="09">09:00</option>
+    <option value="10">10:00</option>
+    <option value="11">11:00</option>
+    <option value="12">12:00</option>
+    <option value="13">13:00</option>
+    <option value="14">14:00</option>
+    <option value="15">15:00</option>
+    <option value="16">16:00</option>
+    <option value="17">17:00</option>
+    <option value="18">18:00</option>
+    <option value="19">19:00</option>
+    <option value="20">20:00</option>
+    <option value="21" selected>21:00</option>
+    <option value="22">22:00</option>
+    <option value="23">23:00</option>
+  </select><br><br>
   <button onclick="processData()">Verarbeiten</button>
 
-  <h3>Aktuellste 5 Werte um 21 Uhr</h3>
+  <h3>Aktuellste 5 Werte zur gewählten Stunde</h3>
   <table id="last5"></table>
 
-  <h3>Seit dem letzten Wert ≥ 12 °C um 21 Uhr</h3>
+  <h3>Seit dem letzten Wert ≥ 12 °C zur gewählten Stunde</h3>
   <table id="sinceLast12"></table>
 
-  <h3>Tägliche Werte um 21 Uhr</h3>
+  <h3>Tägliche Werte zur gewählten Stunde</h3>
   <table id="output"></table>
 
   <script>
@@ -43,20 +73,21 @@
     }
 
     function processData() {
+      const selectedHour = document.getElementById("hourSelect").value; // "00".."23"
       const raw = document.getElementById("input").value.trim().split("\n");
       const rows = raw.map(line => line.split(";").map(x => x.trim()));
 
-      // === filter all rows with hour=21 ===
-      const rows21 = rows.filter(r => {
+      // === filter all rows with selected hour ===
+      const rowsH = rows.filter(r => {
         const datetime = r[1] || "";
-        return datetime.length === 10 && datetime.substring(8,10) === "21";
+        return datetime.length === 10 && datetime.substring(8,10) === selectedHour;
       });
 
       // sort ascending by datetime numeric (so earliest first)
-      rows21.sort((a,b) => Number(a[1]) - Number(b[1]));
+      rowsH.sort((a,b) => Number(a[1]) - Number(b[1]));
 
-      // === Last 5 values at 21h (descending) ===
-      const last5Rows = [...rows21].sort((a,b)=>Number(b[1])-Number(a[1])).slice(0,5);
+      // === Last 5 values at selected hour (descending) ===
+      const last5Rows = [...rowsH].sort((a,b)=>Number(b[1])-Number(a[1])).slice(0,5);
       const last5Table = document.getElementById("last5");
       last5Table.innerHTML = `
         <tr>
@@ -78,16 +109,14 @@
         `;
       });
 
-      // === Since last ≥12°C at 21h ===
-      // find the last entry (by date) with temp>=12
-      const idx = [...rows21].reverse().findIndex(r => parseFloat(r[3])>=12);
+      // === Since last ≥12°C at selected hour ===
+      const idx = [...rowsH].reverse().findIndex(r => parseFloat(r[3])>=12);
       let sinceRows = [];
       if (idx !== -1) {
-        // index from end; convert to forward index:
-        const forwardIndex = rows21.length - 1 - idx;
-        sinceRows = rows21.slice(forwardIndex);
-				// newest first:
-				sinceRows.sort((a,b)=>Number(b[1]) - Number(a[1]));
+        const forwardIndex = rowsH.length - 1 - idx;
+        sinceRows = rowsH.slice(forwardIndex);
+        // newest first:
+        sinceRows.sort((a,b)=>Number(b[1]) - Number(a[1]));
       }
       const sinceTable = document.getElementById("sinceLast12");
       sinceTable.innerHTML = `
@@ -110,7 +139,7 @@
         `;
       });
 
-      // === 21:00 daily first values ===
+      // === Daily first values at selected hour ===
       const seenDays = new Set();
       const filtered = [];
       for (const r of rows) {
@@ -118,24 +147,23 @@
         if (datetime.length !== 10) continue;
         const date = datetime.substring(0, 8); // YYYYMMDD
         const hour = datetime.substring(8, 10);
-        if (hour === "21" && !seenDays.has(date)) {
+        if (hour === selectedHour && !seenDays.has(date)) {
           seenDays.add(date);
           filtered.push(r);
         }
       }
 
-			// sort newest first:
-			filtered.sort((a,b)=>Number(b[1]) - Number(a[1]));
+      // sort newest first:
+      filtered.sort((a,b)=>Number(b[1]) - Number(a[1]));
 
       // Build table
       const out = document.getElementById("output");
       out.innerHTML = "";
       if (filtered.length === 0) {
-        out.innerHTML = "<tr><td>Keine 21:00-Einträge gefunden</td></tr>";
+        out.innerHTML = "<tr><td>Keine Einträge gefunden</td></tr>";
         return;
       }
 
-      // Header
       out.innerHTML = `
         <tr>
           <th>Zeit</th>
